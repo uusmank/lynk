@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'user_type',
     ];
 
     /**
@@ -42,4 +43,18 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    public function transactions() {
+        return $this->hasMany(Transaction::class, 'payer_id');
+    }
+
+    /**
+     * Get the user is an admin
+     */
+    protected function isAdmin(): Attribute
+    {
+        return Attribute::make(
+            $this->user_type === 'admin'
+        );
+    }
 }
