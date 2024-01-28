@@ -3,9 +3,7 @@ namespace App\Repositories;
 
 use App\Models\Transaction;
 use App\Repositories\Interfaces\TransactionRepositoryInterface;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class TransactionRepository implements TransactionRepositoryInterface
 {
@@ -35,18 +33,37 @@ class TransactionRepository implements TransactionRepositoryInterface
 
     public function generateMonthlyReports($startDate, $endDate): array
     {
-         //Log::info(
-        return Transaction::select(
-            DB::raw('YEAR(due_on) as year'),
-            DB::raw('MONTH(due_on) as month'),
-            DB::raw('SUM(CASE WHEN status = "Paid" THEN transactions.amount ELSE 0 END) as paid_amount'),
-            DB::raw('SUM(CASE WHEN status = "Outstanding" THEN transactions.amount ELSE 0 END) as outstanding_amount'),
-            DB::raw('SUM(CASE WHEN status = "Overdue" THEN transactions.amount ELSE 0 END) as overdue_amount')
-        )
-            ->whereBetween('due_on', [$startDate, $endDate])
-            ->groupBy(DB::raw('YEAR(due_on)'),DB::raw('MONTH(due_on)'))
-            ->get()->toArray();
-        //return [];
+        $results = DB::select("select year,month,round(sum(paid),2) as paid,round(sum(overdue),2)as overdue,round(sum(outstanding),2) as outstanding from ((SELECT
+        MONTH(paid_on) AS month,
+        YEAR(paid_on) AS year,
+        SUM(payments.amount) AS paid,
+        0 AS overdue,
+        0 AS outstanding
+        FROM payments
+        WHERE
+        paid_on BETWEEN :paid_on_start_date AND :paid_on_end_date
+        GROUP BY
+            YEAR(paid_on),MONTH(paid_on))
+ UNION
+ (SELECT
+      MONTH(due_on) AS month,
+      YEAR(due_on) AS year,
+      0 AS paid,
+      SUM(CASE WHEN due_on < CURDATE() THEN transactions.amount- COALESCE(payments.amount,0) ELSE 0 END) AS overdue,
+      SUM(CASE WHEN due_on >= CURDATE() THEN transactions.amount-COALESCE(payments.amount,0) ELSE 0 END) AS outstanding
+  FROM
+      transactions
+          LEFT JOIN
+          payments ON transactions.id = payments.transaction_id
+  WHERE
+      due_on BETWEEN :due_on_start_date AND :due_on_end_date
+  GROUP BY
+      YEAR(due_on),MONTH(due_on)
+  ORDER BY
+      YEAR(due_on), MONTH(due_on))
+ ) as report group by year,month order by year,month asc
+", ['paid_on_start_date' => $startDate,'paid_on_end_date'=>$endDate,'due_on_start_date' => $startDate,'due_on_end_date'=>$endDate]);
+        return $results;
     }
 
     public function getTransactionById(int $id): Transaction
