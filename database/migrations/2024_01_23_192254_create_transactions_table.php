@@ -13,6 +13,7 @@ class CreateTransactionsTable extends Migration
             $table->foreignId('payer_id')->constrained('users');
             $table->date('due_on');
             $table->decimal('vat');
+            $table->enum('status', ['Paid', 'Outstanding', 'Overdue'])->default('Outstanding');
             $table->boolean('is_vat_inclusive');
             $table->timestamps();
         });
